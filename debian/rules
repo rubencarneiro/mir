@@ -5,8 +5,6 @@ DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
 DEB_HOST_ARCH_ENDIAN ?= $(shell dpkg-architecture -qDEB_HOST_ARCH_ENDIAN)
 EXACT_PACKAGE_VERSION = $(shell dpkg-parsechangelog | grep Version | cut -d' ' -f 2)
 
-DEB_BUILD_OPTIONS=nocheck
-
 export DPKG_GENSYMBOLS_CHECK_LEVEL = 4
 
 %:
