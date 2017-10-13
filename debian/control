@@ -2,7 +2,7 @@ Source: mir
 Section: x11
 Priority: optional
 Maintainer: Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>
-XSBC-Original-Maintainer: Thomas Voß <thomas.voss@canonical.com>
+XSBC-Original-Maintainer: Thomas Voss <thomas.voss@canonical.com>
 Build-Depends: cmake,
                cmake-data,
                pkg-config,
@@ -24,7 +24,7 @@ Build-Depends: cmake,
                libglm-dev,
                libprotobuf-dev,
                pkg-config,
-               android-headers-23,
+               android-headers (>= 7.1),
                libhardware-dev [i386 amd64 armhf arm64],
                libandroid-properties-dev [i386 amd64 armhf arm64],
                libgoogle-glog-dev,
