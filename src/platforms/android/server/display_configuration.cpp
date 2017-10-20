@@ -159,9 +159,9 @@ mg::DisplayConfigurationOutput& mga::DisplayConfiguration::operator[](mg::Displa
 {
     auto id = disp_id.as_value() - 1;
     printf("dsp id: %i", id);
-    if (id != primary_id && id != external_id && id != virtual_id)
-        BOOST_THROW_EXCEPTION(std::invalid_argument("invalid display id"));
-    return configurations[primary_id];
+    //if (id != primary_id && id != external_id && id != virtual_id)
+        //BOOST_THROW_EXCEPTION(std::invalid_argument("invalid display id"));
+    return configurations[id];
 }
 
 void mga::DisplayConfiguration::set_virtual_output_to(int width, int height)
