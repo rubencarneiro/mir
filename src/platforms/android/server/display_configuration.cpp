@@ -16,6 +16,7 @@
 
 #include "display_configuration.h"
 #include <boost/throw_exception.hpp>
+#include <stdio.h>
 
 namespace mg = mir::graphics;
 namespace mga = mg::android;
@@ -157,9 +158,10 @@ mg::DisplayConfigurationOutput& mga::DisplayConfiguration::virt()
 mg::DisplayConfigurationOutput& mga::DisplayConfiguration::operator[](mg::DisplayConfigurationOutputId const& disp_id)
 {
     auto id = disp_id.as_value() - 1;
+    printf("dsp id: %i", id);
     if (id != primary_id && id != external_id && id != virtual_id)
         BOOST_THROW_EXCEPTION(std::invalid_argument("invalid display id"));
-    return configurations[id];
+    return configurations[primary_id];
 }
 
 void mga::DisplayConfiguration::set_virtual_output_to(int width, int height)
