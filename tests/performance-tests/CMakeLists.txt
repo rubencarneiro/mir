@@ -35,3 +35,5 @@ target_link_libraries(mir_client_startup_performance_test
 )
 
 add_dependencies(mir_glmark2_performance_test GMock)
+add_dependencies(mir_compositor_performance_test GMock)
+add_dependencies(mir_client_startup_performance_test GMock)
