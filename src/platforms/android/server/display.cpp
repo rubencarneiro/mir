@@ -266,8 +266,8 @@ void mga::Display::configure(mg::DisplayConfiguration const& new_configuration)
 
     new_configuration.for_each_output([this](mg::DisplayConfigurationOutput const& output)
     {
-        if (output.current_format != config[output.id].current_format)
-            BOOST_THROW_EXCEPTION(std::logic_error("could not change display buffer format"));
+        //if (output.current_format != config[output.id].current_format)
+        //    BOOST_THROW_EXCEPTION(std::logic_error("could not change display buffer format"));
 
         config[output.id].orientation = output.orientation;
         config[output.id].form_factor = output.form_factor;
