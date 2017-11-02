@@ -97,8 +97,8 @@ EGLConfig select_egl_config_with_format(
             return (visual_id == required_visual_id);
         });
 
-    if (pegl_config == end(config_slots))
-        BOOST_THROW_EXCEPTION(std::runtime_error("could not select EGL config for use with framebuffer"));
+    //if (pegl_config == end(config_slots))
+    //    BOOST_THROW_EXCEPTION(std::runtime_error("could not select EGL config for use with framebuffer"));
 
     return *pegl_config;
 }
