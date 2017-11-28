@@ -124,14 +124,14 @@ void mrl::DisplayConfigurationReport::log_configuration(
                             "%sEDID product code: %hu", indent, edid->product_code());
             }
 
-            int width_mm = out.physical_size_mm.width.as_int();
-            int height_mm = out.physical_size_mm.height.as_int();
-            float inches =
-                sqrtf(width_mm * width_mm + height_mm * height_mm) / 25.4;
+          //  int width_mm = out.physical_size_mm.width.as_int();
+          //  int height_mm = out.physical_size_mm.height.as_int();
+          //  float inches =
+          //      sqrtf(width_mm * width_mm + height_mm * height_mm) / 25.4;
 
-            logger->log(component, severity,
-                        "%sPhysical size %.1f\" %dx%dmm",
-                        indent, inches, width_mm, height_mm);
+            //logger->log(component, severity,
+            //            "%sPhysical size %.1f\" %dx%dmm",
+            //            indent, inches, width_mm, height_mm);
 
             static const char* const power_mode[] =
                 {"on", "in standby", "suspended", "off"};
