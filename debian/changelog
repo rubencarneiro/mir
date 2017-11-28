@@ -1,4 +1,4 @@
-mir (0.28.0+17.10.20171011.1-0ubuntu1) artful; urgency=medium
+mir (0.28.0) xenial; urgency=medium
 
   * New upstream release 0.28.0(https://launchpad.net/mir/+milestone/0.28.0)
     - ABI summary:
