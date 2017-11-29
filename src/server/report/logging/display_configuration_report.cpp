@@ -137,7 +137,7 @@ void mrl::DisplayConfigurationReport::log_configuration(
                 {"on", "in standby", "suspended", "off"};
             logger->log(component, severity,
                         "%sPower is %s", indent, power_mode[out.power_mode]);
-
+            return;
             if (out.used)
             {
                 if (out.current_mode_index < out.modes.size())
