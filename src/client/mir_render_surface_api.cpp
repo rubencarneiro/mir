@@ -185,7 +185,7 @@ try
     mir::require(render_surface);
     auto connection = connection_map.connection(render_surface);
     auto rs = connection->connection_surface_map()->render_surface(render_surface);
-    return rs->get_buffer_stream(width, height, format, mir_buffer_usage_software);
+    return rs->get_buffer_stream(width, height, format, mir_buffer_usage_hardware);
 }
 catch (std::exception const& ex)
 {
