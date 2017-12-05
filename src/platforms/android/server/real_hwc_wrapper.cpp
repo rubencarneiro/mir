@@ -30,7 +30,7 @@ namespace
 {
 int num_displays(std::array<hwc_display_contents_1_t*, HWC_NUM_DISPLAY_TYPES> const& displays)
 {
-    return std::distance(displays.begin(), 
+    return std::distance(displays.begin(),
         std::find_if(displays.begin(), displays.end(),
             [](hwc_display_contents_1_t* d){ return d == nullptr; }));
 }
@@ -141,6 +141,13 @@ void mga::RealHwcWrapper::set(
 
 void mga::RealHwcWrapper::vsync_signal_on(DisplayName display_name) const
 {
+    // Workaround for HH hardware vsync issue.
+    // There seems to be a bug where it fails to generate vsync events upon
+    // first eventControl call to turn on HWC_EVENT_VSYNC
+
+    // First disable vsync then enable again to get HWC HH out of bad state
+    vsync_signal_off(display_name);
+
     if (auto rc = hwc_device->eventControl(hwc_device.get(), as_hwc_display(display_name), HWC_EVENT_VSYNC, 1))
     {
         std::stringstream ss;
