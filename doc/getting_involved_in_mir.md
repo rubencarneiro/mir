@@ -1,36 +1,52 @@
-Getting Involved in Mir  {#getting_involved_in_mir}
-=======================
+# Getting Involved in Mir  {#getting_involved_in_mir}
 
-Getting involved
-----------------
+## Getting involved
 
-The best place to ask questions and discuss about the Mir project is
-the \#ubuntu-mir IRC channel on freenode.
+The Mir project website is <http://www.mirserver.io/>, 
+the code is [hosted on GitHub](https://github.com/MirServer) 
 
-The Mir project is hosted on Launchpad: https://launchpad.net/mir
+For announcements and other discussions on Mir see: 
+[Mir on community.ubuntu](https://community.ubuntu.com/c/mir) 
+
+For other questions and discussion about the Mir project: 
+the \#mirserver IRC channel on freenode.
+
+
+## Getting Mir source and dependencies
+###  On Ubuntu
+
+You’ll need a few development tools installed:
+
+    $ sudo apt install devscripts equivs git
+
+With these installed you can checkout Mir and get the remaining dependencies:
+
+    $ git clone --recursive https://github.com/MirServer/mir.git
+    $ cd mir
+    $ mk-build-deps -i -s sudo
+
+### On Fedora
+
+You’ll need some development tools and packages installed:
+
+    $ sudo dnf install git cmake gcc-c++ boost-devel mesa-libEGL-devel \
+    mesa-libGLES-devel glm-devel protobuf-lite-devel protobuf-compiler \
+    capnproto-devel capnproto glog-devel gflags-devel systemd-devel \
+    glib2-devel wayland-devel mesa-libgbm-devel libepoxy-devel nettle-devel \
+    libinput-devel libxml++-devel libuuid-devel libxkbcommon-devel \
+    freetype-devel lttng-ust-devel libatomic qterminal qt5-qtwayland \
+    python3-pillow libevdev-devel umockdev-devel gtest-devel gmock-devel
+
+With these installed you can checkout Mir:
+
+    $ git clone --recursive https://github.com/MirServer/mir.git
+    $ cd mir
 
 Building Mir
 ------------
 
-These instructions assume that you’re using Ubuntu 16.04LTS or later, I’ve not
-earlier Ubuntu versions or other distributions.
-
-You’ll need a few development and utility packages installed, along with the
-Mir graphics drivers:
-
-    $ sudo apt install devscripts equivs bzr
-    $ sudo apt install mir-graphics-drivers-desktop
-
-If you’re working on a phone or tablet use mir-graphics-drivers-android in
-place of mir-graphics-drivers-desktop. (See \ref building_source_for_arm for
-more on this.)
-
-With these installed you can checkout and build Mir:
-
-    $ bzr branch lp:mir
-    $ sudo mk-build-deps -i
-    $ mkdir mir/build
-    $ cd  mir/build
+    $ mkdir build
+    $ cd  build
     $ cmake ..
     $ make
 
@@ -45,11 +61,7 @@ development).
 The miral-shell example is simple, don’t expect to see a sophisticated launcher
 by default. You can start mir apps from the command-line. For example:
 
-    $ bin/miral-run gnome-terminal
-
-That’s right, a lot of standard GTK+ applications will “just work” (the GDK
-toolkit has a Mir backend). Any that assume the existence of an X11 and bypass
-the toolkit my making X11 protocol calls will have problems though.
+    $ bin/miral-run qterminal
 
 To exit from miral-shell press Ctrl-Alt-BkSp.
 
@@ -57,23 +69,9 @@ You can install the Mir examples, headers and libraries you've built with:
   
     $ sudo make install
 
-### Preparing a VM to run Mir
-
-Especially if you want to debug the shell without locking your system this might be a helpful setup:
-
-- \ref setup_kvm_for_mir
-- \ref setup_vmware_for_mir
-
 ### Contributing to Mir
 
-Currently, the Mir code activity is performed on a development branch:
-lp:~mir-team/mir/development-branch
-
-This development branch is promoted to the branch used for the ubuntu archive
-and touch images. Please submit any merge proposals against the development
-branch.
-
-Please file bug reports at: https://bugs.launchpad.net/mir
+Please file bug reports at: https://github.com/MirServer/mir/issues
 
 The Mir development mailing list can be found at: https://lists.ubuntu.com/mailman/listinfo/Mir-devel
 
@@ -89,11 +87,10 @@ The Mir coding guidelines are [here](cppguide/index.html).
  - \ref performance_framework
  - \ref latency "Measuring visual latency"
 
-Building Mesa
--------------
+## Building Mesa
 
-*The Mesa packages shipped with Ubuntu are already built with the relevant Mir patches
-and should work out of the box with Mir.*
+_The Mesa packages shipped with Ubuntu are already built with the relevant Mir patches
+and should work out of the box with Mir._
 
 For GL accelerated clients to use Mir they need to use a patched version of Mesa
 that supports Mir.

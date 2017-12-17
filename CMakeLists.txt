@@ -1,4 +1,4 @@
-# Copyright © 2012 Canonical Ltd.
+# Copyright © 2012-2017 Canonical Ltd.
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License version 2 or 3 as
@@ -28,7 +28,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 set(MIR_VERSION_MAJOR 0)
-set(MIR_VERSION_MINOR 28)
+set(MIR_VERSION_MINOR 29)
 set(MIR_VERSION_PATCH 0)
 
 add_definitions(-DMIR_VERSION_MAJOR=${MIR_VERSION_MAJOR})
@@ -268,11 +268,24 @@ if (MIR_BUILD_PLATFORM_MESA_KMS OR MIR_BUILD_PLATFORM_MESA_X11)
     message(WARNING "Hybrid support requires libgbm from Mesa 11.0 or greater. Hybrid setups will not work")
     add_definitions(-DMIR_NO_HYBRID_SUPPORT)
   endif()
+  if (DRM_VERSION VERSION_GREATER 2.4.84)
+    add_definitions(-DMIR_DRMMODEADDFB_HAS_CONST_SIGNATURE)
+  endif()
 endif()
 
 if (MIR_BUILD_PLATFORM_EGLSTREAM_KMS)
   pkg_check_modules(EPOXY REQUIRED epoxy)
   pkg_check_modules(DRM REQUIRED libdrm)
+endif()
+
+# This incantation gets the MIR_EGL_SUPPORTED default right for Mesa
+execute_process(COMMAND grep mir_toolkit /usr/include/EGL/eglplatform.h
+        OUTPUT_VARIABLE MIR_EGL_SUPPORTED_OUT)
+
+if (MIR_EGL_SUPPORTED_OUT STREQUAL "")
+  option(MIR_EGL_SUPPORTED "Build examples that depend on Mir EGL." OFF)
+else()
+  option(MIR_EGL_SUPPORTED "Build examples that depend on Mir EGL." ON)
 endif()
 
 set(MIR_TRACEPOINT_LIB_INSTALL_DIR ${CMAKE_INSTALL_LIBDIR}/mir/tools)
@@ -288,9 +301,10 @@ else ()
   add_definitions(-DMIR_LIBINPUT_HAS_ACCEL_PROFILE=1)
 endif ()
 
-add_subdirectory(benchmarks/)
 add_subdirectory(examples/)
-add_subdirectory(playground/)
+if (MIR_EGL_SUPPORTED)
+  add_subdirectory(playground/)
+endif()
 add_subdirectory(guides/)
 add_subdirectory(cmake/)
 
@@ -299,13 +313,14 @@ if (MIR_ENABLE_TESTS)
   pkg_check_modules(LIBEVDEV REQUIRED libevdev)
   include_directories(${GMOCK_INCLUDE_DIR} ${GTEST_INCLUDE_DIR})
   add_subdirectory(tests/)
+  add_subdirectory(benchmarks/)
 
   # There's no nice way to format this. Thanks CMake.
   mir_add_test(NAME LGPL-required
-    COMMAND /bin/sh -c "! grep -rl 'GNU General' ${PROJECT_SOURCE_DIR}/src/client ${PROJECT_SOURCE_DIR}/include/client ${PROJECT_SOURCE_DIR}/src/core ${PROJECT_SOURCE_DIR}/include/core ${PROJECT_SOURCE_DIR}/src/common ${PROJECT_SOURCE_DIR}/include/common ${PROJECT_SOURCE_DIR}/src/include/common ${PROJECT_SOURCE_DIR}/src/platform ${PROJECT_SOURCE_DIR}/include/platform ${PROJECT_SOURCE_DIR}/src/include/platform ${PROJECT_SOURCE_DIR}/src/platforms ${PROJECT_SOURCE_DIR}/include/platforms ${PROJECT_SOURCE_DIR}/src/include/platforms ${PROJECT_SOURCE_DIR}/src/renderers ${PROJECT_SOURCE_DIR}/include/renderers ${PROJECT_SOURCE_DIR}/src/include/renderers ${PROJECT_SOURCE_DIR}/src/capnproto"
+    COMMAND /bin/sh -c "! grep -rl --exclude-dir=wlcs 'GNU General' ${PROJECT_SOURCE_DIR}/src/client ${PROJECT_SOURCE_DIR}/include/client ${PROJECT_SOURCE_DIR}/src/core ${PROJECT_SOURCE_DIR}/include/core ${PROJECT_SOURCE_DIR}/src/common ${PROJECT_SOURCE_DIR}/include/common ${PROJECT_SOURCE_DIR}/src/include/common ${PROJECT_SOURCE_DIR}/src/platform ${PROJECT_SOURCE_DIR}/include/platform ${PROJECT_SOURCE_DIR}/src/include/platform ${PROJECT_SOURCE_DIR}/src/platforms ${PROJECT_SOURCE_DIR}/include/platforms ${PROJECT_SOURCE_DIR}/src/include/platforms ${PROJECT_SOURCE_DIR}/src/renderers ${PROJECT_SOURCE_DIR}/include/renderers ${PROJECT_SOURCE_DIR}/src/include/renderers ${PROJECT_SOURCE_DIR}/src/capnproto"
   )
   mir_add_test(NAME GPL-required
-    COMMAND /bin/sh -c "! grep -rl 'GNU Lesser' ${PROJECT_SOURCE_DIR}/src/server ${PROJECT_SOURCE_DIR}/include/server ${PROJECT_SOURCE_DIR}/src/include/server ${PROJECT_SOURCE_DIR}/tests ${PROJECT_SOURCE_DIR}/examples"
+    COMMAND /bin/sh -c "! grep -rl --exclude-dir=wlcs 'GNU Lesser' ${PROJECT_SOURCE_DIR}/src/server ${PROJECT_SOURCE_DIR}/include/server ${PROJECT_SOURCE_DIR}/src/include/server ${PROJECT_SOURCE_DIR}/tests ${PROJECT_SOURCE_DIR}/examples"
   )
 
   mir_add_test(NAME package-abis
@@ -313,7 +328,6 @@ if (MIR_ENABLE_TESTS)
 endif ()
 
 enable_coverage_report(mirserver)
-include (cmake/ABICheck.cmake)
 
 add_custom_target(ptest
     COMMAND "${CMAKE_SOURCE_DIR}/tools/run_ctests.sh" "--cost-file" "${CMAKE_BINARY_DIR}/ptest_ctest_cost_data.txt" "sh ${CMAKE_BINARY_DIR}/discover_all_tests.sh" "--" "$$ARGS"

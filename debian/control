@@ -22,7 +22,6 @@ Build-Depends: cmake,
                libgbm-dev,
                libglm-dev,
                libprotobuf-dev,
-               pkg-config,
                libgoogle-glog-dev,
                liblttng-ust-dev,
                libxkbcommon-dev (>= 0.5),
@@ -36,7 +35,6 @@ Build-Depends: cmake,
                valgrind [amd64 i386 armhf arm64],
                libglib2.0-dev,
                libfreetype6-dev,
-               abi-compliance-checker,
                libevdev-dev,
                libinput-dev (>= 0.21),
                uuid-dev,
@@ -70,7 +68,7 @@ Description: Display server for Ubuntu - RPC definitions
 
 #TODO: Packaging infrastructure for better dependency generation,
 #      ala pkg-xorg's xviddriver:Provides and ABI detection.
-Package: libmirserver45
+Package: libmirserver46
 Section: libs
 Architecture: linux-any
 Multi-Arch: same
@@ -149,7 +147,7 @@ Section: libdevel
 Architecture: linux-any
 Multi-Arch: same
 Pre-Depends: ${misc:Pre-Depends}
-Depends: libmirserver45 (= ${binary:Version}),
+Depends: libmirserver46 (= ${binary:Version}),
          libmirplatform-dev (= ${binary:Version}),
          libmircommon-dev (= ${binary:Version}),
          libglm-dev,
@@ -296,6 +294,11 @@ Pre-Depends: ${misc:Pre-Depends}
 Depends: ${misc:Depends},
          ${shlibs:Depends},
 Recommends: mir-demos,
+            xmir,
+            xwayland,
+            glmark2-es2,
+            glmark2-es2-mir,
+            glmark2-es2-wayland
 Description: Display Server for Ubuntu - stress tests and other test tools
  Mir is a display server running on linux systems, with a focus on efficiency,
  robust operation and a well-defined driver model.

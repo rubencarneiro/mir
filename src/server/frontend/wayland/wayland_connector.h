@@ -29,7 +29,10 @@
 namespace mir
 {
 
-
+namespace input
+{
+class InputDeviceHub;
+}
 namespace graphics
 {
 class GraphicBufferAllocator;
@@ -54,6 +57,7 @@ public:
         optional_value<std::string> const& display_name,
         std::shared_ptr<Shell> const& shell,
         DisplayChanger& display_config,
+        std::shared_ptr<input::InputDeviceHub> const& input_hub,
         std::shared_ptr<graphics::GraphicBufferAllocator> const& allocator,
         bool arw_socket);
 
@@ -67,6 +71,7 @@ public:
     int client_socket_fd(
         std::function<void(std::shared_ptr<Session> const& session)> const& connect_handler) const override;
 
+    void run_on_wayland_display(std::function<void(wl_display*)> const& functor);
 private:
     std::unique_ptr<wl_display, void(*)(wl_display*)> const display;
     mir::Fd const pause_signal;

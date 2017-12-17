@@ -92,6 +92,7 @@ private:
 void exception_handler()
 try
 {
+    mir::report_exception();
     throw;
 }
 catch (mir::AbnormalExit const& /*error*/)
@@ -112,12 +113,9 @@ catch (std::exception const& error)
         fwrite(value.c_str(), value.size(), 1, output);
         pclose(output);
     }
-
-    mir::report_exception();
 }
 catch (...)
 {
-    mir::report_exception();
 }
 }
 
@@ -143,7 +141,7 @@ try
     InputFilters input_filters;
     me::TestClientRunner test_runner;
 
-    bool const server_exited_normally = runner.run_with({
+    auto const server_exit_status = runner.run_with({
         // example options for display layout, logging and timeout
         miral::display_configuration_options,
         me::add_log_host_lifecycle_option_to,
@@ -154,7 +152,7 @@ try
         me::add_custom_compositor_option_to,
         me::add_input_device_configuration_options_to,
         add_timeout_option_to,
-        miral::CursorTheme{"default"},
+        miral::CursorTheme{"default:DMZ-White"},
         input_filters,
         test_runner
     });
@@ -165,7 +163,7 @@ try
         return EXIT_FAILURE;
     }
 
-    return server_exited_normally ? EXIT_SUCCESS : EXIT_FAILURE;
+    return server_exit_status;
 }
 catch (...)
 {

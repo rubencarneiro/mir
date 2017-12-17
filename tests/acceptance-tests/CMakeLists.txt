@@ -1,5 +1,7 @@
 include(CMakeDependentOption)
 
+add_subdirectory(wayland)
+
 set(
   SOURCES
 
@@ -47,7 +49,6 @@ set(
   test_unresponsive_client.cpp
   test_client_platform_operation.cpp
   test_input_device_hub.cpp
-  test_latency.cpp
   test_render_override.cpp
   test_surface_modifications.cpp
   test_surface_placement.cpp
@@ -66,6 +67,7 @@ set(
   test_presentation_chain.cpp
   test_render_surface.cpp
   test_buffer_stream_arrangement1.cpp
+  test_seat_report.cpp
 )
 
 if (MIR_TEST_PLATFORM STREQUAL "mesa-kms" OR MIR_TEST_PLATFORM STREQUAL "mesa-x11")
@@ -97,6 +99,7 @@ add_dependencies(mir_acceptance_tests GMock)
 
 target_link_libraries(mir_acceptance_tests
   mir-test-assist
+  mir-test-doubles-platform-static
 
   mirclient
   mirclient-debug-extension

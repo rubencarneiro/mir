@@ -45,6 +45,7 @@ include_directories(
   ${PROJECT_SOURCE_DIR}/include/platform
   ${PROJECT_SOURCE_DIR}/include/miral
   ${PROJECT_SOURCE_DIR}/include/server
+  ${MIRSERVER_INCLUDE_DIRS}
   ${PROJECT_SOURCE_DIR}/include/client
   ${PROJECT_SOURCE_DIR}/include/common
   ${PROJECT_SOURCE_DIR}/include/test
@@ -96,7 +97,6 @@ add_subdirectory(loader-tests/)
 add_library(mir-test-assist STATIC
   $<TARGET_OBJECTS:mir-public-test>
   $<TARGET_OBJECTS:mir-public-test-doubles>
-  $<TARGET_OBJECTS:mir-public-test-doubles-platform>
   $<TARGET_OBJECTS:mir-public-test-framework>
 )
 
@@ -106,12 +106,11 @@ PUBLIC
   miral
   mirserver
 
-  mir-test-doubles-platform-static
   ${Boost_LIBRARIES}
   ${GTEST_BOTH_LIBRARIES}
-  ${GMOCK_LIBRARY}
 PRIVATE
   ${GMOCK_MAIN_LIBRARY}
+  ${GMOCK_LIBRARIES}
   ${CMAKE_THREAD_LIBS_INIT} # Link in pthread.
 )
 

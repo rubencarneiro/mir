@@ -26,6 +26,9 @@
 #include <memory>
 #include <vector>
 
+
+struct wl_display;
+
 namespace mir
 {
 template<class Observer>
@@ -454,6 +457,12 @@ public:
     /// It can be passed to another process, or used directly with mir_connect()
     /// using the format "fd://%d".
     auto open_prompt_socket() -> Fd;
+
+    /// Get a file descriptor that can be used to connect a Wayland client
+    /// It can be passed to another process, or used with wl_display_connect_to_fd()
+    auto open_wayland_client_socket() -> Fd;
+
+    void run_on_wayland_display(std::function<void(wl_display*)> const& functor);
 /** @} */
 
 private:

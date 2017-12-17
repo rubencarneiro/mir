@@ -110,6 +110,15 @@ void mtf::FakeInputDeviceImpl::emit_touch_sequence(std::function<mir::input::syn
         });
 }
 
+void mtf::FakeInputDeviceImpl::emit_key_state(std::vector<uint32_t> const& key_syms)
+{
+    queue->enqueue(
+        [this, key_syms]()
+        {
+            device->emit_key_state(key_syms);
+        });
+}
+
 void mtf::FakeInputDeviceImpl::on_new_configuration_do(std::function<void(mir::input::InputDevice const& device)> callback)
 {
     device->set_apply_settings_callback(callback);
@@ -147,7 +156,7 @@ void mtf::FakeInputDeviceImpl::InputDevice::synthesize_events(synthesis::KeyPara
 
     if (!sink)
         BOOST_THROW_EXCEPTION(std::runtime_error("Device is not started."));
-    sink->handle_input(*key_event);
+    sink->handle_input(std::move(key_event));
 }
 
 void mtf::FakeInputDeviceImpl::InputDevice::synthesize_events(synthesis::ButtonParameters const& button)
@@ -165,7 +174,7 @@ void mtf::FakeInputDeviceImpl::InputDevice::synthesize_events(synthesis::ButtonP
 
     if (!sink)
         BOOST_THROW_EXCEPTION(std::runtime_error("Device is not started."));
-    sink->handle_input(*button_event);
+    sink->handle_input(std::move(button_event));
 }
 
 MirPointerAction mtf::FakeInputDeviceImpl::InputDevice::update_buttons(synthesis::EventAction action, MirPointerButton button)
@@ -187,8 +196,9 @@ void mtf::FakeInputDeviceImpl::InputDevice::synthesize_events(synthesis::MotionP
     if (!sink)
         BOOST_THROW_EXCEPTION(std::runtime_error("Device is not started."));
 
-    auto event_time = std::chrono::duration_cast<std::chrono::nanoseconds>(
-        std::chrono::steady_clock::now().time_since_epoch());
+    auto event_time = pointer.event_time.value_or(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()));
     // constant scaling is used here to simplify checking for the
     // expected results. Default settings of the device lead to no
     // scaling at all.
@@ -204,7 +214,7 @@ void mtf::FakeInputDeviceImpl::InputDevice::synthesize_events(synthesis::MotionP
                                                 rel_x,
                                                 rel_y);
 
-    sink->handle_input(*pointer_event);
+    sink->handle_input(std::move(pointer_event));
 }
 
 void mtf::FakeInputDeviceImpl::InputDevice::synthesize_events(synthesis::TouchParameters const& touch)
@@ -231,8 +241,13 @@ void mtf::FakeInputDeviceImpl::InputDevice::synthesize_events(synthesis::TouchPa
             event_time,
             {{MirTouchId{1}, touch_action, mir_touch_tooltype_finger, abs_x, abs_y, 1.0f, 8.0f, 5.0f, 0.0f}});
 
-        sink->handle_input(*touch_event);
+        sink->handle_input(std::move(touch_event));
     }
+}
+
+void mtf::FakeInputDeviceImpl::InputDevice::emit_key_state(std::vector<uint32_t> const& scan_codes)
+{
+    sink->key_state(scan_codes);
 }
 
 mir::optional_value<mi::PointerSettings> mtf::FakeInputDeviceImpl::InputDevice::get_pointer_settings() const

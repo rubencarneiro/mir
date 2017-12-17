@@ -43,6 +43,11 @@
 
 #include "mir/client/event.h"
 
+#include "mir/input/device.h"
+#include "mir/input/mir_keyboard_config.h"
+#include "mir/input/input_device_hub.h"
+#include "mir/input/input_device_observer.h"
+
 #include <system_error>
 #include <sys/eventfd.h>
 #include <wayland-server-core.h>
@@ -67,6 +72,7 @@
 #include "../../../platforms/common/server/shm_buffer.h"
 
 #include <sys/stat.h>
+#include <sys/socket.h>
 #include "mir/anonymous_shm_file.h"
 
 namespace mf = mir::frontend;
@@ -75,6 +81,7 @@ namespace mc = mir::compositor;
 namespace ms = mir::scene;
 namespace geom = mir::geometry;
 namespace mcl = mir::client;
+namespace mi = mir::input;
 
 namespace mir
 {
@@ -469,10 +476,7 @@ public:
             consumed = true;
         }
 
-        wl_shm_buffer_begin_access(buffer);
-        auto data = wl_shm_buffer_get_data(buffer);
-        do_with_pixels(static_cast<unsigned char const*>(data));
-        wl_shm_buffer_end_access(buffer);
+        do_with_pixels(static_cast<unsigned char const*>(data.get()));
     }
 
     geometry::Stride stride() const override
@@ -489,9 +493,26 @@ private:
           size_{wl_shm_buffer_get_width(this->buffer), wl_shm_buffer_get_height(this->buffer)},
           stride_{wl_shm_buffer_get_stride(this->buffer)},
           format_{wl_format_to_mir_format(wl_shm_buffer_get_format(this->buffer))},
+          data{std::make_unique<uint8_t[]>(size_.height.as_int() * stride_.as_int())},
           consumed{false},
           on_consumed{std::move(on_consumed)}
     {
+        if (stride_.as_int() < size_.width.as_int() * MIR_BYTES_PER_PIXEL(format_))
+        {
+            wl_resource_post_error(
+                resource,
+                WL_SHM_ERROR_INVALID_STRIDE,
+                "Stride (%u) is less than width × bytes per pixel (%u×%u). "
+                "Did you accidentally specify stride in pixels?",
+                stride_.as_int(), size_.width.as_int(), MIR_BYTES_PER_PIXEL(format_));
+
+            BOOST_THROW_EXCEPTION((
+                std::runtime_error{"Buffer has invalid stride"}));
+        }
+
+        wl_shm_buffer_begin_access(this->buffer);
+        std::memcpy(data.get(), wl_shm_buffer_get_data(this->buffer), size_.height.as_int() * stride_.as_int());
+        wl_shm_buffer_end_access(this->buffer);
     }
 
     static void on_buffer_destroyed(wl_listener* listener, void*)
@@ -529,6 +550,8 @@ private:
     geom::Size const size_;
     geom::Stride const stride_;
     MirPixelFormat const format_;
+
+    std::unique_ptr<uint8_t[]> const data;
 
     bool consumed;
     std::function<void()> on_consumed;
@@ -662,8 +685,6 @@ void WlSurface::commit()
 {
     if (pending_buffer)
     {
-        std::shared_ptr<mg::Buffer> mir_buffer;
-        auto shm_buffer = wl_shm_buffer_get(pending_buffer);
         auto send_frame_notifications =
             [executor = executor, frames = pending_frames, destroyed = destroyed]()
             {
@@ -688,22 +709,32 @@ void WlSurface::commit()
                     }));
             };
 
-        if (shm_buffer)
+        std::shared_ptr<mg::Buffer> mir_buffer;
+
+        if (wl_shm_buffer_get(pending_buffer))
         {
             mir_buffer = WlShmBuffer::mir_buffer_from_wl_buffer(
                 pending_buffer,
                 std::move(send_frame_notifications));
         }
-        else if (
-            allocator &&
-            (mir_buffer = allocator->buffer_from_resource(
-                pending_buffer,
-                std::move(send_frame_notifications))))
-        {
-        }
         else
         {
-            BOOST_THROW_EXCEPTION((std::runtime_error{"Received unhandled buffer type"}));
+            auto release_buffer = [executor = executor, buffer = pending_buffer, destroyed = destroyed]()
+                {
+                    executor->spawn(run_unless(
+                        destroyed,
+                        [buffer](){ wl_resource_queue_event(buffer, WL_BUFFER_RELEASE); }));
+                };
+
+            if (allocator &&
+                (mir_buffer = allocator->buffer_from_resource(
+                    pending_buffer, std::move(send_frame_notifications), std::move(release_buffer))))
+            {
+            }
+            else
+            {
+                BOOST_THROW_EXCEPTION((std::runtime_error{"Received unhandled buffer type"}));
+            }
         }
 
         /*
@@ -798,6 +829,7 @@ public:
         wl_client* client,
         wl_resource* parent,
         uint32_t id,
+        mir::input::Keymap const& initial_keymap,
         std::function<void(WlKeyboard*)> const& on_destroy,
         std::shared_ptr<mir::Executor> const& executor)
         : Keyboard(client, parent, id),
@@ -811,19 +843,14 @@ public:
         // TODO: We should really grab the keymap for the focused surface when
         // we receive focus.
 
-        xkb_rule_names default_rules;
-        memset(&default_rules, 0, sizeof(default_rules));
+        // TODO: Maintain per-device keymaps, and send the appropriate map before
+        // sending an event from a keyboard with a different map.
 
-        keymap = decltype(keymap){
-            xkb_keymap_new_from_names(
-                context.get(),
-                &default_rules,
-                XKB_KEYMAP_COMPILE_NO_FLAGS),
-            &xkb_keymap_unref};
-
-        state = decltype(state){
-            xkb_state_new(keymap.get()),
-            &xkb_state_unref};
+        /* The wayland::Keyboard constructor has already run, creating the keyboard
+         * resource. It is thus safe to send a keymap event to it; the client will receive
+         * the keyboard object before this event.
+         */
+        set_keymap(initial_keymap);
     }
 
     ~WlKeyboard()
@@ -964,6 +991,38 @@ public:
             &xkb_keymap_unref);
 
         state = decltype(state)(xkb_state_new(keymap.get()), &xkb_state_unref);
+    }
+
+    void set_keymap(mir::input::Keymap const& new_keymap)
+    {
+        xkb_rule_names const names = {
+            "evdev",
+            new_keymap.model.c_str(),
+            new_keymap.layout.c_str(),
+            new_keymap.variant.c_str(),
+            new_keymap.options.c_str()
+        };
+        keymap = decltype(keymap){
+            xkb_keymap_new_from_names(
+                context.get(),
+                &names,
+                XKB_KEYMAP_COMPILE_NO_FLAGS),
+            &xkb_keymap_unref};
+
+        // TODO: We might need to copy across the existing depressed keys?
+        state = decltype(state)(xkb_state_new(keymap.get()), &xkb_state_unref);
+
+        auto buffer = xkb_keymap_get_as_string(keymap.get(), XKB_KEYMAP_FORMAT_TEXT_V1);
+        auto length = strlen(buffer);
+
+        mir::AnonymousShmFile shm_buffer{length};
+        memcpy(shm_buffer.base_ptr(), buffer, length);
+
+        wl_keyboard_send_keymap(
+            resource,
+            WL_KEYBOARD_KEYMAP_FORMAT_XKB_V1,
+            shm_buffer.fd(),
+            length);
     }
 
 private:
@@ -1320,8 +1379,20 @@ private:
 class WlSeat
 {
 public:
-    WlSeat(wl_display* display, std::shared_ptr<mir::Executor> const& executor)
-        : executor{executor},
+    WlSeat(
+        wl_display* display,
+        std::shared_ptr<mi::InputDeviceHub> const& input_hub,
+        std::shared_ptr<mir::Executor> const& executor)
+        : config_observer{
+              std::make_shared<ConfigObserver>(
+                  keymap,
+                  [this](mir::input::Keymap const& new_keymap)
+                  {
+                      keymap = new_keymap;
+
+                  })},
+          input_hub{input_hub},
+          executor{executor},
           global{wl_global_create(
               display,
               &wl_seat_interface,
@@ -1333,10 +1404,12 @@ public:
         {
             BOOST_THROW_EXCEPTION(std::runtime_error("Failed to export wl_seat interface"));
         }
+        input_hub->add_observer(config_observer);
     }
 
     ~WlSeat()
     {
+        input_hub->remove_observer(config_observer);
         wl_global_destroy(global);
     }
 
@@ -1350,9 +1423,38 @@ public:
     }
 
 private:
+    class ConfigObserver :  public mi::InputDeviceObserver
+    {
+    public:
+        ConfigObserver(
+            mir::input::Keymap const& keymap,
+            std::function<void(mir::input::Keymap const&)> const& on_keymap_commit)
+            : current_keymap{keymap},
+              on_keymap_commit{on_keymap_commit}
+        {
+        }
+
+        void device_added(std::shared_ptr<input::Device> const& device) override;
+        void device_changed(std::shared_ptr<input::Device> const& device) override;
+        void device_removed(std::shared_ptr<input::Device> const& device) override;
+        void changes_complete() override;
+
+    private:
+        mir::input::Keymap const& current_keymap;
+        mir::input::Keymap pending_keymap;
+        std::function<void(mir::input::Keymap const&)> const on_keymap_commit;
+    };
+
+    mir::input::Keymap keymap;
+    std::shared_ptr<ConfigObserver> const config_observer;
+
     std::unordered_map<wl_client*, InputCtx<WlPointer>> mutable pointer;
     std::unordered_map<wl_client*, InputCtx<WlKeyboard>> mutable keyboard;
     std::unordered_map<wl_client*, InputCtx<WlTouch>> mutable touch;
+
+    std::shared_ptr<mi::InputDeviceHub> const input_hub;
+
+
     std::shared_ptr<mir::Executor> const executor;
 
     static void bind(struct wl_client* client, void* data, uint32_t version, uint32_t id)
@@ -1413,6 +1515,7 @@ private:
                 client,
                 resource,
                 id,
+                me->keymap,
                 [&input_ctx](WlKeyboard* listener)
                 {
                     input_ctx.unregister_listener(listener);
@@ -1435,8 +1538,10 @@ private:
                 },
                 me->executor});
     }
-    static void release(struct wl_client* /*client*/, struct wl_resource* /*resource*/) {}
-
+    static void release(struct wl_client* /*client*/, struct wl_resource* us)
+    {
+        wl_resource_destroy(us);
+    }
 
     wl_global* const global;
     static struct wl_seat_interface const vtable;
@@ -1462,6 +1567,37 @@ InputCtx<WlPointer> const& WlSeat::acquire_pointer_reference(wl_client* client) 
 InputCtx<WlTouch> const& WlSeat::acquire_touch_reference(wl_client* client) const
 {
     return touch[client];
+}
+
+void WlSeat::ConfigObserver::device_added(std::shared_ptr<input::Device> const& device)
+{
+    if (auto keyboard_config = device->keyboard_configuration())
+    {
+        if (current_keymap != keyboard_config.value().device_keymap())
+        {
+            pending_keymap = keyboard_config.value().device_keymap();
+        }
+    }
+}
+
+void WlSeat::ConfigObserver::device_changed(std::shared_ptr<input::Device> const& device)
+{
+    if (auto keyboard_config = device->keyboard_configuration())
+    {
+        if (current_keymap != keyboard_config.value().device_keymap())
+        {
+            pending_keymap = keyboard_config.value().device_keymap();
+        }
+    }
+}
+
+void WlSeat::ConfigObserver::device_removed(std::shared_ptr<input::Device> const& /*device*/)
+{
+}
+
+void WlSeat::ConfigObserver::changes_complete()
+{
+    on_keymap_commit(pending_keymap);
 }
 
 void WaylandEventSink::send_buffer(BufferStreamId /*id*/, graphics::Buffer& /*buffer*/, graphics::BufferIpcMsgType)
@@ -1742,6 +1878,7 @@ public:
         std::shared_ptr<mf::Shell> const& shell,
         WlSeat& seat)
         : ShellSurface(client, parent, id),
+          destroyed{std::make_shared<bool>(false)},
           shell{shell}
     {
         auto* tmp = wl_resource_get_user_data(surface);
@@ -1762,8 +1899,11 @@ public:
             auto const window = session->get_surface(surface_id);
             auto const size = window->client_size();
             sink->latest_resize(size);
-            seat.spawn([resource=resource, height = size.height.as_int(), width = size.width.as_int()]()
-                { wl_shell_surface_send_configure(resource, WL_SHELL_SURFACE_RESIZE_NONE, width, height); });
+            seat.spawn(
+                run_unless(
+                    destroyed,
+                    [resource=resource, height = size.height.as_int(), width = size.width.as_int()]()
+                    { wl_shell_surface_send_configure(resource, WL_SHELL_SURFACE_RESIZE_NONE, width, height); }));
         }
 
         mir_surface.set_resize_handler(
@@ -1787,6 +1927,7 @@ public:
 
     ~WlShellSurface() override
     {
+        *destroyed = true;
         if (auto session = session_for_client(client))
         {
             shell->destroy_surface(session, surface_id);
@@ -1863,6 +2004,7 @@ protected:
     {
     }
 private:
+    std::shared_ptr<bool> const destroyed;
     std::shared_ptr<mf::Shell> const shell;
     mf::SurfaceId surface_id;
 };
@@ -1981,6 +2123,18 @@ private:
         }
     }
 
+    std::function<void()> get_work()
+    {
+        std::lock_guard<std::recursive_mutex> lock{mutex};
+        if (!workqueue.empty())
+        {
+            auto const work = std::move(workqueue.front());
+            workqueue.pop_front();
+            return work;
+        }
+        return {};
+    }
+
     static int on_notify(int fd, uint32_t, void* data)
     {
         auto executor = static_cast<WaylandExecutor*>(data);
@@ -1994,10 +2148,8 @@ private:
                 err);
         }
 
-        std::lock_guard<std::recursive_mutex> lock{executor->mutex};
-        while (!executor->workqueue.empty())
+        while (auto work = executor->get_work())
         {
-            auto work = std::move(executor->workqueue.front());
             try
             {
                 work();
@@ -2010,8 +2162,6 @@ private:
                     std::current_exception(),
                     "Exception processing Wayland event loop work item");
             }
-
-            executor->workqueue.pop_front();
         }
 
         return 0;
@@ -2055,6 +2205,7 @@ mf::WaylandConnector::WaylandConnector(
     optional_value<std::string> const& display_name,
     std::shared_ptr<mf::Shell> const& shell,
     DisplayChanger& display_config,
+    std::shared_ptr<mi::InputDeviceHub> const& input_hub,
     std::shared_ptr<mg::GraphicBufferAllocator> const& allocator,
     bool arw_socket)
     : display{wl_display_create(), &cleanup_display},
@@ -2089,7 +2240,7 @@ mf::WaylandConnector::WaylandConnector(
         display.get(),
         executor,
         this->allocator);
-    seat_global = std::make_unique<mf::WlSeat>(display.get(), executor);
+    seat_global = std::make_unique<mf::WlSeat>(display.get(), input_hub, executor);
     output_manager = std::make_unique<mf::OutputManager>(
         display.get(),
         display_config);
@@ -2172,11 +2323,35 @@ void mf::WaylandConnector::stop()
 
 int mf::WaylandConnector::client_socket_fd() const
 {
-    return -1;
+    enum { server, client, size };
+    int socket_fd[size];
+
+    char const* error = nullptr;
+
+    if (socketpair(AF_LOCAL, SOCK_STREAM, 0, socket_fd))
+    {
+        error = "Could not create socket pair";
+    }
+    else if (!wl_client_create(display.get(), socket_fd[server]))
+    {
+        error = "Failed to add server end of socketpair to Wayland display";
+    }
+
+    if (error)
+        BOOST_THROW_EXCEPTION((std::system_error{errno, std::system_category(), error}));
+
+    return socket_fd[client];
 }
 
 int mf::WaylandConnector::client_socket_fd(
     std::function<void(std::shared_ptr<Session> const& session)> const& /*connect_handler*/) const
 {
     return -1;
+}
+
+void mf::WaylandConnector::run_on_wayland_display(std::function<void(wl_display*)> const& functor)
+{
+    auto executor = WaylandExecutor::executor_for_event_loop(wl_display_get_event_loop(display.get()));
+
+    executor->spawn([display_ref = display.get(), functor]() { functor(display_ref); });
 }

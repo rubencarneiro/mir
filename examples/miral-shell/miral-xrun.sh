@@ -1,6 +1,11 @@
 #!/bin/bash
 
-x11_server=Xmir
+x11_server=Xwayland
+
+if which Xmir 2>/dev/null >/dev/null
+then
+    x11_server=Xmir
+fi
 
 while [ $# -gt 0 ]
 do
@@ -27,34 +32,46 @@ export GDK_BACKEND=x11
 export QT_QPA_PLATFORM=xcb
 export SDL_VIDEODRIVER=x11
 
+if ! which ${x11_server} 2>/dev/null >/dev/null
+then
+    echo "Error: Need ${x11_server}"
+    echo "On Ubuntu run \"sudo apt install xmir xwayland\""; 
+    echo "On Fedora run \"sudo dnf install xorg-x11-server-Xwayland\""; 
+    exit 1
+fi
+
 if [ "${x11_server}" == "Xmir" ];
 then
-  x_server_installed=$(apt list xmir 2>/dev/null | grep installed | wc -l)
-  if [ "${x_server_installed}" == "0" ]; then echo "Need Xmir - run \"sudo apt install xmir\""; exit 1 ;fi
-
-  if   [ -e "${XDG_RUNTIME_DIR}/miral_socket" ];
+  if [ -v MIR_SOCKET ]
   then
-    socket_value=${XDG_RUNTIME_DIR}/miral_socket
+    mir_socket=${MIR_SOCKET}
+  elif [ -e "${XDG_RUNTIME_DIR}/miral_socket" ];
+  then
+    mir_socket=${XDG_RUNTIME_DIR}/miral_socket
   elif [ -e "${XDG_RUNTIME_DIR}/mir_socket" ];
   then
-    socket_value=${XDG_RUNTIME_DIR}/mir_socket
+    mir_socket=${XDG_RUNTIME_DIR}/mir_socket
   else
     echo "Error: Cannot detect Mir endpoint"; exit 1
   fi
-  MIR_SOCKET=${socket_value}
   x11_server_args=-rootless
 elif [ "${x11_server}" == "Xwayland" ];
 then
-  x_server_installed=$(apt list xwayland 2>/dev/null | grep installed | wc -l)
-  if [ "${x_server_installed}" == "0" ]; then echo "Need Xwayland - run \"sudo apt install xwayland\""; exit 1 ;fi
-
-  if [ -e "${XDG_RUNTIME_DIR}/miral_wayland" ];
+  if [ -v WAYLAND_DISPLAY ]
   then
-    socket_value=miral_wayland
+    wayland_display=${WAYLAND_DISPLAY}
+  elif [ -e "${XDG_RUNTIME_DIR}/miral_wayland" ];
+  then
+    wayland_display=miral_wayland
+  elif [ -e "${XDG_RUNTIME_DIR}/wayland-1" ]
+  then
+    wayland_display=wayland-1
+  elif [ -e "${XDG_RUNTIME_DIR}/wayland-0" ]
+  then
+    wayland_display=wayland-0
   else
     echo "Error: Cannot detect Mir-Wayland endpoint"; exit 1
   fi
-  WAYLAND_DISPLAY=${socket_value}
   x11_server_args=
 fi
 
@@ -64,6 +81,7 @@ while [ -e "/tmp/.X11-unix/X${port}" ]; do
     let port+=1
 done
 
-${x11_server} ${x11_server_args} :${port} & pid=$!
+MIR_SOCKET=${mir_socket} WAYLAND_DISPLAY=${wayland_display} ${x11_server} ${x11_server_args} :${port} & pid=$!
+while [ ! -e "/tmp/.X11-unix/X${port}" ]; do echo "waiting for DISPLAY=:${port}"; sleep 1 ;done
 DISPLAY=:${port} "$@"
 kill ${pid}
