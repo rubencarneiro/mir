@@ -1,3 +1,9 @@
+mir (0.26.4+ubports1) xenial; urgency=medium
+
+  * Imported to ubports
+
+ -- Marius Gripsgard <marius@ubports.com>  Thu, 28 Dec 2017 03:39:07 +0100
+
 mir (0.26.3+16.04.20170605-0ubuntu1) xenial; urgency=medium
 
   [ Daniel van Vugt ]
