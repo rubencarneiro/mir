@@ -1,4 +1,4 @@
-mir (0.29.0) artful; urgency=medium
+mir (0.29.0) xenial; urgency=medium
 
   * New upstream release 0.29.0(https://launchpad.net/mir/+milestone/0.29.0)
     - ABI summary:
