@@ -40,14 +40,14 @@ void ml::DumbConsoleLogger::log(ml::Severity severity,
 
     std::ostream& out = severity < ml::Severity::informational ? std::cerr : std::cout;
 
-    struct timespec ts;
-    clock_gettime(CLOCK_REALTIME, &ts);
-    char now[32];
-    auto offset = strftime(now, sizeof(now), "%F %T", localtime(&ts.tv_sec));
-    snprintf(now+offset, sizeof(now)-offset, ".%06ld", ts.tv_nsec / 1000);
+  //  struct timespec ts;
+  //  clock_gettime(CLOCK_REALTIME, &ts);
+  //  char now[32];
+  //  auto offset = strftime(now, sizeof(now), "%F %T", localtime(&ts.tv_sec));
+ //   snprintf(now+offset, sizeof(now)-offset, ".%06ld", ts.tv_nsec / 1000);
 
     out << "["
-        << now
+//        << now
         << "] "
         << lut[static_cast<int>(severity)]
         << component
