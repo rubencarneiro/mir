@@ -47,7 +47,10 @@ bool msh::SurfaceSpecification::is_empty() const
         !streams.is_set() &&
         !parent.is_set() &&
         !input_shape.is_set() &&
-        !shell_chrome.is_set();
+        !shell_chrome.is_set() &&
+        !depth_layer.is_set() &&
+        !attached_edges.is_set() &&
+        !exclusive_rect.is_set();
 }
 
 void msh::SurfaceSpecification::update_from(SurfaceSpecification const& that)
@@ -116,4 +119,10 @@ void msh::SurfaceSpecification::update_from(SurfaceSpecification const& that)
         cursor_image = that.cursor_image;
     if (that.stream_cursor.is_set())
         stream_cursor = that.stream_cursor;
+    if (that.depth_layer.is_set())
+        depth_layer = that.depth_layer;
+    if (that.attached_edges.is_set())
+        attached_edges = that.attached_edges;
+    if (that.exclusive_rect.is_set())
+        exclusive_rect = that.exclusive_rect;
 }

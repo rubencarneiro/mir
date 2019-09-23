@@ -41,9 +41,10 @@
 
 namespace mf = mir::frontend;
 namespace geom = mir::geometry;
+namespace mw = mir::wayland;
 
 mf::WlSurfaceState::Callback::Callback(wl_resource* new_resource)
-    : wayland::Callback{new_resource},
+    : mw::Callback{new_resource, Version<1>()},
       destroyed{deleted_flag_for_resource(resource)}
 {
 }
@@ -78,7 +79,7 @@ mf::WlSurface::WlSurface(
     wl_resource* new_resource,
     std::shared_ptr<Executor> const& executor,
     std::shared_ptr<graphics::WaylandAllocator> const& allocator)
-    : Surface(new_resource),
+    : Surface(new_resource, Version<4>()),
         session{mf::get_session(client)},
         stream_id{session->create_buffer_stream({{}, mir_pixel_format_invalid, graphics::BufferUsage::undefined})},
         stream{session->get_buffer_stream(stream_id)},
@@ -145,6 +146,11 @@ void mf::WlSurface::set_role(WlSurfaceRole* role_)
 void mf::WlSurface::clear_role()
 {
     role = &null_role;
+}
+
+void mf::WlSurface::set_pending_offset(std::experimental::optional<geom::Displacement> const& offset)
+{
+    pending.offset = offset;
 }
 
 std::unique_ptr<mf::WlSurface, std::function<void(mf::WlSurface*)>> mf::WlSurface::add_child(WlSubsurface* child)
@@ -331,6 +337,7 @@ void mf::WlSurface::commit(WlSurfaceState const& state)
             {
                 mir_buffer = WlShmBuffer::mir_buffer_from_wl_buffer(
                     buffer,
+                    executor,
                     std::move(executor_send_frame_callbacks));
                 tracepoint(
                     mir_server_wayland,
@@ -346,7 +353,7 @@ void mf::WlSurface::commit(WlSurfaceState const& state)
                     {
                         executor->spawn(run_unless(
                             destroyed,
-                            [buffer](){ wl_resource_queue_event(buffer, wayland::Buffer::Opcode::release); }));
+                            [buffer](){ wl_resource_post_event(buffer, wayland::Buffer::Opcode::release); }));
                     };
 
                 mir_buffer = allocator->buffer_from_resource(

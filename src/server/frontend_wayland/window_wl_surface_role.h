@@ -68,7 +68,9 @@ public:
     void refresh_surface_data_now() override;
 
     void apply_spec(shell::SurfaceSpecification const& new_spec);
-    void set_geometry(int32_t x, int32_t y, int32_t width, int32_t height);
+    void set_pending_offset(std::experimental::optional<geometry::Displacement> const& offset);
+    void set_pending_width(std::experimental::optional<geometry::Width> const& width);
+    void set_pending_height(std::experimental::optional<geometry::Height> const& height);
     void set_title(std::string const& title);
     void initiate_interactive_move();
     void initiate_interactive_resize(MirResizeEdge edge);
@@ -79,16 +81,28 @@ public:
 
     void set_state_now(MirWindowState state);
 
+    /// Gets called after the surface has committed (so current_size() may return the committed buffer size) but before
+    /// the Mir window is modified (so if a pending size is set or a spec is applied those changes will take effect)
+    virtual void handle_commit() = 0;
+
     virtual void handle_state_change(MirWindowState new_state) = 0;
     virtual void handle_active_change(bool is_now_active) = 0;
     virtual void handle_resize(std::experimental::optional<geometry::Point> const& new_top_left,
                                geometry::Size const& new_size) = 0;
+    virtual void handle_close_request() = 0;
 
 protected:
     std::shared_ptr<bool> const destroyed;
 
-    std::experimental::optional<geometry::Size> window_size();
-    std::experimental::optional<geometry::Size> requested_window_size(); // Window size requested by Mir
+    /// The size the window will be after the next commit
+    auto pending_size() const -> geometry::Size;
+
+    /// The size the window currently is (the committed size, or a reasonable default if it has never committed)
+    auto current_size() const -> geometry::Size;
+
+    /// Window size requested by Mir
+    std::experimental::optional<geometry::Size> requested_window_size();
+
     MirWindowState window_state();
     bool is_active();
     uint64_t latest_timestamp_ns();
@@ -102,8 +116,22 @@ private:
     OutputManager* output_manager;
     std::shared_ptr<WlSurfaceEventSink> const sink;
     std::unique_ptr<scene::SurfaceCreationParameters> const params;
-    std::experimental::optional<geometry::Size> pending_window_size;
-    std::experimental::optional<geometry::Size> committed_window_size;
+
+    /// The explicitly set (not taken from the surface buffer size) uncommitted window size
+    /// @{
+    std::experimental::optional<geometry::Width> pending_explicit_width;
+    std::experimental::optional<geometry::Height> pending_explicit_height;
+    /// @}
+
+    /// If the committed window size was set explicitly, rather than being taken from the buffer size
+    /// @{
+    bool committed_width_set_explicitly{false};
+    bool committed_height_set_explicitly{false};
+    /// @}
+
+    /// The last committed window size (either explicitly set or taken from the surface buffer size)
+    std::experimental::optional<geometry::Size> committed_size;
+
     SurfaceId surface_id_;
     std::unique_ptr<shell::SurfaceSpecification> pending_changes;
 

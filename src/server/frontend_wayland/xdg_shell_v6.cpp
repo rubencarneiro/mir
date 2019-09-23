@@ -28,6 +28,7 @@
 
 namespace mf = mir::frontend;
 namespace geom = mir::geometry;
+namespace mw = mir::wayland;
 
 namespace mir
 {
@@ -79,11 +80,13 @@ public:
     void grab(struct wl_resource* seat, uint32_t serial) override;
     void destroy() override;
 
+    void handle_commit() override {};
     void handle_state_change(MirWindowState /*new_state*/) override {};
     void handle_active_change(bool /*is_now_active*/) override {};
     void handle_resize(
         std::experimental::optional<geometry::Point> const& new_top_left,
         geometry::Size const& new_size) override;
+    void handle_close_request() override;
 
 private:
     std::experimental::optional<geom::Point> cached_top_left;
@@ -112,14 +115,16 @@ public:
     void unset_fullscreen() override;
     void set_minimized() override;
 
+    void handle_commit() override {};
     void handle_state_change(MirWindowState /*new_state*/) override;
     void handle_active_change(bool /*is_now_active*/) override;
     void handle_resize(std::experimental::optional<geometry::Point> const& new_top_left,
                        geometry::Size const& new_size) override;
+    void handle_close_request() override;
 
 private:
     static XdgToplevelV6* from(wl_resource* surface);
-    void send_configure(std::experimental::optional<geometry::Size> new_size);
+    void send_toplevel_configure();
 
     XdgSurfaceV6* const xdg_surface;
 };
@@ -158,7 +163,7 @@ private:
 };
 
 mf::XdgShellV6::Instance::Instance(wl_resource* new_resource, mf::XdgShellV6* shell)
-    : wayland::XdgShellV6{new_resource},
+    : mw::XdgShellV6{new_resource, Version<1>()},
       shell{shell}
 {
 }
@@ -191,7 +196,7 @@ mf::XdgShellV6::XdgShellV6(
     std::shared_ptr<mf::Shell> const shell,
     WlSeat& seat,
     OutputManager* output_manager) :
-    Global(display, 1),
+    Global(display, Version<1>()),
     shell{shell},
     seat{seat},
     output_manager{output_manager}
@@ -213,7 +218,7 @@ mf::XdgSurfaceV6* mf::XdgSurfaceV6::from(wl_resource* surface)
 
 mf::XdgSurfaceV6::XdgSurfaceV6(wl_resource* new_resource, WlSurface* surface,
                                XdgShellV6 const& xdg_shell)
-    : wayland::XdgSurfaceV6(new_resource),
+    : mw::XdgSurfaceV6(new_resource, Version<1>()),
       surface{surface},
       xdg_shell{xdg_shell}
 {
@@ -239,7 +244,11 @@ void mf::XdgSurfaceV6::get_popup(wl_resource* new_popup, struct wl_resource* par
 void mf::XdgSurfaceV6::set_window_geometry(int32_t x, int32_t y, int32_t width, int32_t height)
 {
     if (auto& role = window_role())
-        role.value()->set_geometry(x, y, width, height);
+    {
+        role.value()->set_pending_offset(geom::Displacement{-x, -y});
+        role.value()->set_pending_width(geom::Width{width});
+        role.value()->set_pending_height(geom::Height{height});
+    }
 }
 
 void mf::XdgSurfaceV6::ack_configure(uint32_t serial)
@@ -282,7 +291,7 @@ mf::XdgPopupV6::XdgPopupV6(
     XdgSurfaceV6* parent_surface,
     wl_resource* positioner,
     WlSurface* surface)
-    : wayland::XdgPopupV6(new_resource),
+    : mw::XdgPopupV6(new_resource, Version<1>()),
       WindowWlSurfaceRole(
           &xdg_surface->xdg_shell.seat,
           wayland::XdgPopupV6::client,
@@ -339,10 +348,15 @@ void mf::XdgPopupV6::handle_resize(const std::experimental::optional<geometry::P
     }
 }
 
+void mf::XdgPopupV6::handle_close_request()
+{
+    send_popup_done_event();
+}
+
 // XdgToplevelV6
 
 mf::XdgToplevelV6::XdgToplevelV6(struct wl_resource* new_resource, XdgSurfaceV6* xdg_surface, WlSurface* surface)
-    : wayland::XdgToplevelV6(new_resource),
+    : mw::XdgToplevelV6(new_resource, Version<1>()),
       WindowWlSurfaceRole(
           &xdg_surface->xdg_shell.seat,
           wayland::XdgToplevelV6::client,
@@ -483,21 +497,26 @@ void mf::XdgToplevelV6::set_minimized()
 
 void mf::XdgToplevelV6::handle_state_change(MirWindowState /*new_state*/)
 {
-    send_configure(std::experimental::nullopt);
+    send_toplevel_configure();
 }
 
 void mf::XdgToplevelV6::handle_active_change(bool /*is_now_active*/)
 {
-    send_configure(std::experimental::nullopt);
+    send_toplevel_configure();
 }
 
 void mf::XdgToplevelV6::handle_resize(std::experimental::optional<geometry::Point> const& /*new_top_left*/,
-                       geometry::Size const& new_size)
+                       geometry::Size const& /*new_size*/)
 {
-    send_configure(new_size);
+    send_toplevel_configure();
 }
 
-void mf::XdgToplevelV6::send_configure(std::experimental::optional<geometry::Size> new_size)
+void mf::XdgToplevelV6::handle_close_request()
+{
+    send_close_event();
+}
+
+void mf::XdgToplevelV6::send_toplevel_configure()
 {
     wl_array states;
     wl_array_init(&states);
@@ -526,9 +545,8 @@ void mf::XdgToplevelV6::send_configure(std::experimental::optional<geometry::Siz
         break;
     }
 
-    geom::Size size = new_size.value_or(
-        requested_window_size().value_or(
-            geom::Size{})); // 0 size values means default for toplevel comfigure
+    // 0 sizes means default for toplevel configure
+    geom::Size size = requested_window_size().value_or(geom::Size{0, 0});
 
     send_configure_event(size.width.as_int(), size.height.as_int(), &states);
     wl_array_release(&states);
@@ -545,7 +563,7 @@ mf::XdgToplevelV6* mf::XdgToplevelV6::from(wl_resource* surface)
 // XdgPositionerV6
 
 mf::XdgPositionerV6::XdgPositionerV6(wl_resource* new_resource)
-    : wayland::XdgPositionerV6(new_resource)
+    : mw::XdgPositionerV6(new_resource, Version<1>())
 {
     // specifying gravity is not required by the xdg shell protocol, but is by Mir window managers
     surface_placement_gravity = mir_placement_gravity_center;

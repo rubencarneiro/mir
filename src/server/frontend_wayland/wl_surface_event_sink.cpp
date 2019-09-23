@@ -78,7 +78,11 @@ void mf::WlSurfaceEventSink::handle_event(EventUPtr&& event)
                     auto const placement_event{mir_event_get_window_placement_event(event.get())};
                     auto const rect = mir_window_placement_get_relative_position(placement_event);
                     window->handle_resize(geom::Point{rect.left, rect.top}, geom::Size{rect.width, rect.height});
+                    break;
                 }
+                case mir_event_type_close_window:
+                    window->handle_close_request();
+                    break;
                 default:
                     break;
             }
@@ -87,9 +91,11 @@ void mf::WlSurfaceEventSink::handle_event(EventUPtr&& event)
 
 void mf::WlSurfaceEventSink::handle_resize(mir::geometry::Size const& new_size)
 {
-    requested_size = new_size;
     if (new_size != window_size)
+    {
+        requested_size = new_size;
         window->handle_resize(std::experimental::nullopt, new_size);
+    }
 }
 
 void mf::WlSurfaceEventSink::handle_input_event(MirInputEvent const* event)

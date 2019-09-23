@@ -135,6 +135,11 @@ option(MIR_BUILD_PERFORMANCE_TESTS "Build performance tests" ON)
 option(MIR_BUILD_PRIVILEGED_TESTS "Build privileged tests" ON)
 option(MIR_BUILD_UNIT_TESTS "Build unit tests" ON)
 
+cmake_dependent_option(MIR_BUILD_INTERPROCESS_TESTS
+  "Build interprocess acceptance tests as part of default testing" ON
+  "MIR_BUILD_ACCEPTANCE_TESTS" OFF)
+
+
 if (MIR_BUILD_ACCEPTANCE_TESTS)
   add_subdirectory(acceptance-tests/)
   add_subdirectory(umock-acceptance-tests/)
@@ -205,6 +210,9 @@ install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/test/mir
   DESTINATION "include/mirtest"
 )
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/test/mir_test_framework
+  DESTINATION "include/mirtest"
+)
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/test/miral
   DESTINATION "include/mirtest"
 )
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/mirtest.pc

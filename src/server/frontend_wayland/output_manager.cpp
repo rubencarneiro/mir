@@ -17,6 +17,7 @@
  */
 
 #include "output_manager.h"
+#include "wayland_executor.h"
 
 #include <algorithm>
 
@@ -143,7 +144,7 @@ wl_global* mf::Output::make_output(wl_display* display)
     return wl_global_create(
         display,
         &wl_output_interface,
-        2,
+        3,
         this, &on_bind);
 }
 
@@ -152,7 +153,7 @@ void mf::Output::on_bind(wl_client* client, void* data, uint32_t version, uint32
     auto output = reinterpret_cast<Output*>(data);
     auto resource = wl_resource_create(
         client, &wl_output_interface,
-        std::min(version, 2u), id);
+        std::min(version, 3u), id);
     if (resource == NULL)
     {
         wl_client_post_no_memory(client);
@@ -181,9 +182,10 @@ void mf::Output::resource_destructor(wl_resource* resource)
 }
 
 
-mf::OutputManager::OutputManager(wl_display* display, std::shared_ptr<MirDisplay> const& display_config) :
+mf::OutputManager::OutputManager(wl_display* display, std::shared_ptr<MirDisplay> const& display_config, std::shared_ptr<Executor> const& executor) :
     display_config_{display_config},
-    display{display}
+    display{display},
+    executor{executor}
 {
     display_config->register_interest(this);
     display_config->for_each_output(std::bind(&OutputManager::create_output, this, std::placeholders::_1));
@@ -229,23 +231,27 @@ void mf::OutputManager::create_output(mg::DisplayConfigurationOutput const& init
 
 void mf::OutputManager::handle_configuration_change(mg::DisplayConfiguration const& config)
 {
-    config.for_each_output([this](mg::DisplayConfigurationOutput const& output_config)
-        {
-            auto output_iter = outputs.find(output_config.id);
-            if (output_iter != outputs.end())
+    std::shared_ptr<mg::DisplayConfiguration> pconfig{config.clone()};
+    executor->spawn([config = std::move(pconfig), this]
+    {
+        config->for_each_output([this](mg::DisplayConfigurationOutput const& output_config)
             {
-                if (output_config.used)
+                auto output_iter = outputs.find(output_config.id);
+                if (output_iter != outputs.end())
                 {
-                    output_iter->second->handle_configuration_changed(output_config);
+                    if (output_config.used)
+                    {
+                        output_iter->second->handle_configuration_changed(output_config);
+                    }
+                    else
+                    {
+                        outputs.erase(output_iter);
+                    }
                 }
-                else
+                else if (output_config.used)
                 {
-                    outputs.erase(output_iter);
+                    outputs[output_config.id] = std::make_unique<Output>(display, output_config);
                 }
-            }
-            else if (output_config.used)
-            {
-                outputs[output_config.id] = std::make_unique<Output>(display, output_config);
-            }
-        });
+            });
+    });
 }

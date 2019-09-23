@@ -95,6 +95,7 @@ namespace ms = mir::scene;
 namespace geom = mir::geometry;
 namespace mcl = mir::client;
 namespace mi = mir::input;
+namespace mw = mir::wayland;
 
 namespace mir
 {
@@ -242,7 +243,7 @@ public:
         struct wl_display* display,
         std::shared_ptr<mir::Executor> const& executor,
         std::shared_ptr<mg::WaylandAllocator> const& allocator)
-        : Global(display, 3),
+        : Global(display, Version<4>()),
           allocator{allocator},
           executor{executor}
     {
@@ -256,7 +257,7 @@ private:
     {
     public:
         Instance(wl_resource* new_resource, WlCompositor* compositor)
-            : wayland::Compositor{new_resource},
+            : mw::Compositor{new_resource, Version<4>()},
               compositor{compositor}
         {
         }
@@ -292,7 +293,7 @@ public:
         std::shared_ptr<mf::Shell> const& shell,
         WlSeat& seat,
         OutputManager* output_manager)
-        : ShellSurface(new_resource),
+        : ShellSurface(new_resource, Version<1>()),
           WindowWlSurfaceRole{&seat, wayland::ShellSurface::client, surface, shell, output_manager}
     {
     }
@@ -332,8 +333,8 @@ protected:
         apply_spec(mods);
     }
 
+    void handle_commit() override {};
     void handle_state_change(MirWindowState /*new_state*/) override {};
-
     void handle_active_change(bool /*is_now_active*/) override {};
 
     void handle_resize(std::experimental::optional<geometry::Point> const& /*new_top_left*/,
@@ -341,6 +342,11 @@ protected:
     {
         wl_shell_surface_send_configure(resource, WL_SHELL_SURFACE_RESIZE_NONE, new_size.width.as_int(),
                                         new_size.height.as_int());
+    }
+
+    void handle_close_request() override
+    {
+        destroy_wayland_object();
     }
 
     void set_fullscreen(
@@ -453,7 +459,7 @@ public:
         std::shared_ptr<mf::Shell> const& shell,
         WlSeat& seat,
         OutputManager* const output_manager)
-        : Global(display, 1),
+        : Global(display, Version<1>()),
           shell{shell},
           seat{seat},
           output_manager{output_manager}
@@ -471,7 +477,7 @@ private:
     {
     public:
         Instance(wl_resource* new_resource, WlShell* shell)
-            : wayland::Shell{new_resource},
+            : mw::Shell{new_resource, Version<1>()},
               shell{shell}
         {
         }
@@ -603,6 +609,10 @@ auto mir::frontend::WaylandExtensions::get_extension(std::string const& name) co
     return {};
 }
 
+void mf::WaylandExtensions::run_builders(wl_display*, std::function<void(std::function<void()>&& work)> const&)
+{
+}
+
 mf::WaylandConnector::WaylandConnector(
     optional_value<std::string> const& display_name,
     std::shared_ptr<mf::Shell> const& shell,
@@ -642,6 +652,11 @@ mf::WaylandConnector::WaylandConnector(
         WAYLAND_VERSION);
 #endif
 
+    // Run the builders before creating the seat (because that's what GTK3 expects)
+    extensions->run_builders(
+        display.get(),
+        [executor=executor](std::function<void()>&& work) { executor->spawn(std::move(work)); });
+
     /*
      * Here be Dragons!
      *
@@ -659,7 +674,8 @@ mf::WaylandConnector::WaylandConnector(
     seat_global = std::make_unique<mf::WlSeat>(display.get(), input_hub, seat, executor);
     output_manager = std::make_unique<mf::OutputManager>(
         display.get(),
-        display_config);
+        display_config,
+        executor);
 
     data_device_manager_global = mf::create_data_device_manager(display.get());
 
