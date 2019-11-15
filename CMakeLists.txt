@@ -28,7 +28,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 set(MIR_VERSION_MAJOR 1)
-set(MIR_VERSION_MINOR 2)
+set(MIR_VERSION_MINOR 5)
 set(MIR_VERSION_PATCH 0)
 
 add_definitions(-DMIR_VERSION_MAJOR=${MIR_VERSION_MAJOR})
@@ -221,7 +221,7 @@ pkg_check_modules(WAYLAND_EGLSTREAM wayland-eglstream)
 if (WAYLAND_EGLSTREAM_FOUND)
   set(
     MIR_PLATFORM
-    mesa-kms;mesa-x11;eglstream-kms
+    mesa-kms;mesa-x11;eglstream-kms;wayland
     CACHE
     STRING
     "a list of graphics backends to build (options are 'mesa-kms', 'mesa-x11', or 'eglstream-kms')"
@@ -229,7 +229,7 @@ if (WAYLAND_EGLSTREAM_FOUND)
 else()
   set(
     MIR_PLATFORM
-    mesa-kms;mesa-x11
+    mesa-kms;mesa-x11;wayland
     CACHE
     STRING
     "a list of graphics backends to build (options are 'mesa-kms', 'mesa-x11', or 'eglstream-kms')"
@@ -260,6 +260,9 @@ foreach(platform IN LISTS MIR_PLATFORM)
         message(FATAL_ERROR "EGLStream platform requested, but required NVIDIA external EGL platform nvidia-egl-wayland not found")
      endif()
      set(MIR_BUILD_PLATFORM_EGLSTREAM_KMS TRUE)
+  endif()
+  if (platform STREQUAL "wayland")
+     set(MIR_BUILD_PLATFORM_WAYLAND TRUE)
   endif()
 endforeach(platform)
 
@@ -364,6 +367,10 @@ if (MIR_EGL_SUPPORTED_OUT STREQUAL "")
   option(MIR_EGL_SUPPORTED "Build examples that depend on Mir EGL." OFF)
 else()
   option(MIR_EGL_SUPPORTED "Build examples that depend on Mir EGL." ON)
+endif()
+
+if (MIR_BUILD_PLATFORM_WAYLAND)
+  pkg_check_modules(EPOXY REQUIRED epoxy)
 endif()
 
 set(MIR_TRACEPOINT_LIB_INSTALL_DIR ${CMAKE_INSTALL_LIBDIR}/mir/tools)

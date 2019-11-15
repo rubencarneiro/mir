@@ -49,3 +49,11 @@ target_link_libraries(miral-shell
     example-shell-lib
     miral-spinner
 )
+
+mir_add_wrapped_executable(mir-spinner
+    spinner.cpp
+)
+
+target_link_libraries(mir-spinner
+    miral-spinner
+)

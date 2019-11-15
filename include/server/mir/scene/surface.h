@@ -53,7 +53,7 @@ public:
     // resolve ambiguous member function names
 
     std::string name() const override = 0;
-    geometry::Size client_size() const override = 0;
+    geometry::Size content_size() const override = 0;
     geometry::Rectangle input_bounds() const override = 0;
 
     // member functions that don't exist in base classes
@@ -116,6 +116,26 @@ public:
 
     virtual void placed_relative(geometry::Rectangle const& placement) = 0;
     virtual void start_drag_and_drop(std::vector<uint8_t> const& handle) = 0;
+
+    /// The depth layer the surface is on
+    /// It will be kept above all surfaces on lower layers, and below surfaces on higher layers
+    virtual auto depth_layer() const -> MirDepthLayer = 0;
+    /// When the depth layer is changed, the surface becomes the top surface on that layer
+    virtual void set_depth_layer(MirDepthLayer depth_layer) = 0;
+
+    virtual std::experimental::optional<geometry::Rectangle> clip_area() const = 0;
+    virtual void set_clip_area(std::experimental::optional<geometry::Rectangle> const& area) = 0;
+
+    virtual auto focus_state() const -> MirWindowFocusState = 0;
+    virtual void set_focus_state(MirWindowFocusState focus_state) = 0;
+
+    /// Often the same as the session name, but on Wayland can be set on a per-window basis
+    /// See xdg_toplevel.set_app_id and http://standards.freedesktop.org/desktop-entry-spec/ for more details
+    /// Defaults to empty string
+    ///@{
+    virtual auto application_id() const -> std::string = 0;
+    virtual void set_application_id(std::string const& application_id) = 0;
+    ///@}
 };
 }
 }

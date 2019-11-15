@@ -34,7 +34,7 @@ mir::geometry::Size mtd::StubSurface::size() const
     return {};
 }
 
-mir::geometry::Size mtd::StubSurface::client_size() const
+mir::geometry::Size mtd::StubSurface::content_size() const
 {
     return {};
 }
@@ -194,6 +194,41 @@ void mtd::StubSurface::placed_relative(geometry::Rectangle const& /*placement*/)
 }
 
 void mtd::StubSurface::start_drag_and_drop(std::vector<uint8_t> const& /*handle*/)
+{
+}
+
+auto mtd::StubSurface::depth_layer() const -> MirDepthLayer
+{
+    return mir_depth_layer_application;
+}
+
+void mtd::StubSurface::set_depth_layer(MirDepthLayer /*depth_layer*/)
+{
+}
+
+std::experimental::optional<mir::geometry::Rectangle> mtd::StubSurface::clip_area() const
+{
+    return {};
+}
+void mtd::StubSurface::set_clip_area(std::experimental::optional<mir::geometry::Rectangle> const& /*area*/)
+{
+}
+
+MirWindowFocusState mtd::StubSurface::focus_state() const
+{
+    return mir_window_focus_state_unfocused;
+}
+
+void mtd::StubSurface::set_focus_state(MirWindowFocusState /*new_state*/)
+{
+}
+
+std::string mtd::StubSurface::application_id() const
+{
+    return "";
+}
+
+void mtd::StubSurface::set_application_id(std::string const& /*application_id*/)
 {
 }
 
